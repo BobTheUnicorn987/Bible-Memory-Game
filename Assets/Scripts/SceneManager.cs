@@ -2,7 +2,6 @@ using UnityEngine;
 
 public class SceneManager : MonoBehaviour
 {
-    // Singleton (optional, but convenient)
     private static SceneManager _instance;
 
     private void Awake()

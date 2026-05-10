@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using System.Linq;
-using System.Collections.Generic;
 
+#region Helper Classes
 [System.Serializable]
 public class Bible
 {
@@ -42,18 +42,21 @@ public class BookAbbrev
     public string[] Abbreviations;
 }
 
+#endregion
+
 public class VerseLoader
 {
     private Bible bible;
-    private Dictionary<string, string> _bookAbbreviationsMap;
 
     public VerseLoader(string version)
     {
         // Load Bible
-        LoadBible(version);       // TODO: GET FROM SETTINGS/VERSE LIST
-        
-        // Load Abbreviations
-        LoadAbbreviationsMap();
+        LoadBible(version);
+    }
+
+    public void SwapVersion(string version)
+    {
+        LoadBible(version);
     }
     
     private void LoadBible(string version)
@@ -61,25 +64,7 @@ public class VerseLoader
         TextAsset jsonFile = Resources.Load<TextAsset>($"Bibles/{version}_bible");
         bible = JsonUtility.FromJson<Bible>(jsonFile.text);
     }
-
-    private void LoadAbbreviationsMap()
-    {
-        TextAsset jsonFile = Resources.Load<TextAsset>("Bibles/bible_generation/book_name_abbreviations");
-        BookAbbrevs abbrevs = JsonUtility.FromJson<BookAbbrevs>(jsonFile.text);
-        _bookAbbreviationsMap = new Dictionary<string, string>();
-        
-        foreach (var book in abbrevs.Books)
-        {
-            // Add full name to map
-            _bookAbbreviationsMap[book.Full.ToLower()] = book.Full;
-
-            foreach (var abbrev in book.Abbreviations)
-            {
-                _bookAbbreviationsMap[abbrev.ToLower()] = book.Full;
-            }
-        }
-    }
-
+    
     public string GetVerse(int bookIndex, int chapterIndex, int verseIndex)
     {
         return bible.Books[bookIndex].Chapters[chapterIndex].Verses[verseIndex].Text;
@@ -87,21 +72,10 @@ public class VerseLoader
 
     public string GetVerse(string bookName, int chapterNumber, int verseNumber)
     {
-        bookName = NormalizeBookName(bookName);
-        
-        return bible.Books.First(b => b.Name == bookName)
-            .Chapters.First(c => c.Number == chapterNumber)
-            .Verses.First(v => v.Number == verseNumber)
+        return bible.Books
+            .FirstOrDefault(b => b.Name == bookName)?
+            .Chapters.FirstOrDefault(c => c.Number == chapterNumber)?
+            .Verses.FirstOrDefault(v => v.Number == verseNumber)?
             .Text;
-    }
-
-    private string NormalizeBookName(string bookName)
-    {
-        bookName = bookName.Replace(".", "").ToLower();
-        if (_bookAbbreviationsMap.TryGetValue(bookName, out string fullName))
-            return fullName;
-        
-        Debug.LogError($"{bookName} not found in abbreviations map");
-        return null;
     }
 }

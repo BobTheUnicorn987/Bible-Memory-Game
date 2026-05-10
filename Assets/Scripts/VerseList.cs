@@ -1,62 +1,43 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using TMPro;
 using UnityEngine;
 
-public class VerseList : MonoBehaviour
+[System.Serializable]
+public class VerseList
 {
-    private VerseList _instance;
-    private VerseLoader _verseLoader;
-    
+    public string Name;
+    public string Version;
     public List<string> Verses;
-    
-    private List<int[]> _indexes;
-    private List<string> _references;
-    
-    public TMP_Dropdown versionDropdown;
-    public TMP_InputField verseInput;
-    
-    private void Awake()
+    public List<string> References;
+
+    public VerseList(string name, string version, List<string> references)
     {
-        if (_instance == null)
-        {
-            _instance = this;
-            DontDestroyOnLoad(gameObject); // persists between scenes
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
+        Name = name;
+        Version = version;
+        References = references;
+        
+        LoadVerses();
     }
 
-    private void Start()
+    private void LoadVerses()
     {
-        // TODO: Load from a save
-        _verseLoader = new VerseLoader("ESV");
-        
         Verses = new List<string>();
+        VerseLoader verseLoader = new(Version);
         
-        _indexes = new List<int[]>();
-        _references = new List<string>();
-    }
-
-    public void GetVerses()
-    {
-        Verses.Clear();
-        _indexes.Clear();
-        
-        string inputText = verseInput.text;
-        _references = new List<string>(inputText.Split("\n"));
-
-        foreach (string verse in _references)
+        foreach (string reference in References)
         {
-            Debug.Log(ExtractVerse(verse));
+            foreach (string verse in ExtractVerses(reference, verseLoader))
+            {
+                Verses.Add(verse);
+            }
         }
     }
-
-    private string ExtractVerse(string reference)
+    
+    private List<string> ExtractVerses(string reference, VerseLoader verseLoader)
     {
-        string referencePattern = @"^(.*) (\d+):(\d+)(?:-(\d+):(\d+))?$";
+        List<string> verses = new();
+        
+        string referencePattern = @"^(.*) (\d+):(\d+)(?:-(\d+)(?::(\d+))?)?$";
         Match referenceMatch = Regex.Match(reference, referencePattern);
         
         if (referenceMatch.Success)
@@ -64,8 +45,48 @@ public class VerseList : MonoBehaviour
             string bookName =  referenceMatch.Groups[1].Value;
             int.TryParse(referenceMatch.Groups[2].Value, out int chapterNumber);
             int.TryParse(referenceMatch.Groups[3].Value, out int verseNumber);
+            
+            verses.Add(verseLoader.GetVerse(bookName, chapterNumber, verseNumber));
+            
+            // Check for multi-verse reference
+            if (referenceMatch.Groups[4].Success)
+            {
+                if (!referenceMatch.Groups[5].Success)
+                {
+                    int.TryParse(referenceMatch.Groups[4].Value, out int nextVerseNumber);
+                    
+                    for (int i = verseNumber + 1; i <= nextVerseNumber; i++)
+                    {
+                        verses.Add(verseLoader.GetVerse(bookName, chapterNumber, i));
+                    }
+                }
+                else
+                {
+                    int.TryParse(referenceMatch.Groups[4].Value, out int nextChapterNumber);
+                    int.TryParse(referenceMatch.Groups[5].Value, out int nextVerseNumber);
+                    
+                    for (int c = chapterNumber; c <= nextChapterNumber; c++)
+                    {
+                        verseNumber++;
+                        while (!(c == nextChapterNumber && verseNumber > nextVerseNumber))
+                        {
+                            string verse = verseLoader.GetVerse(bookName, c, verseNumber++);
+                            if (verse != null)
+                            {
+                                verses.Add(verse);
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
 
-            return _verseLoader.GetVerse(bookName, chapterNumber, verseNumber);
+                        verseNumber = 0;
+                    }
+                }
+            }
+            
+            return verses;
         }
 
         return null;
